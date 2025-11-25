@@ -1,13 +1,13 @@
 //package com.Nexus.Chatter.security;
+//
 //import org.springframework.context.annotation.Bean;
 //import org.springframework.context.annotation.Configuration;
 //import org.springframework.security.config.Customizer;
 //import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 //import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 //import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-//import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
-//import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 //import org.springframework.security.web.SecurityFilterChain;
+//import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 //import org.springframework.web.cors.CorsConfiguration;
 //import org.springframework.web.cors.CorsConfigurationSource;
 //import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -16,43 +16,40 @@
 //import java.util.List;
 //
 //@Configuration
+//@EnableWebSecurity
 //public class SecurityConfig {
-//    private static final String JWKS_URI ="https://awake-muskox-44.clerk.accounts.dev/.well-known/jwks.json";
-//    @Bean
-//    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 //
+//    private final TenantFilter tenantFilter;
+//
+//    public SecurityConfig(TenantFilter tenantFilter) {
+//        this.tenantFilter = tenantFilter;
+//    }
+//
+//    @Bean
+//    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 //        http
-//                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-//                .csrf(AbstractHttpConfigurer::disable)
+//                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // Enable CORS
+//                .csrf(AbstractHttpConfigurer::disable) // Disable CSRF for APIs
 //                .authorizeHttpRequests(auth -> auth
-//                        .requestMatchers("/public/**").permitAll()
+//                        // Public Endpoints (The Widget)
+//                        .requestMatchers("/api/v1/widget/**").permitAll()
+//
+//                        // Admin Endpoints (Require valid Clerk Token)
+//                        .requestMatchers("/api/v1/admin/**", "/api/v1/tenants/**").authenticated()
+//
+//                        // Default
 //                        .anyRequest().authenticated()
 //                )
-//                .oauth2ResourceServer(oauth2 -> oauth2
-//                        .jwt(jwt -> jwt
-//                                .jwkSetUri(JWKS_URI)
-//                                .jwtAuthenticationConverter(jwtAuthenticationConverter())
-//                        )
-//                );
+//                // Register Clerk as the OAuth2 Resource Server
+//                .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
+//
+//                // Add our custom Tenant Filter AFTER the Auth check
+//                .addFilterAfter(tenantFilter, UsernamePasswordAuthenticationFilter.class);
 //
 //        return http.build();
-//
-//
 //    }
 //
 //    @Bean
-//    public JwtAuthenticationConverter jwtAuthenticationConverter() {
-//        JwtGrantedAuthoritiesConverter grantedAuthoritiesConverter = new JwtGrantedAuthoritiesConverter();
-//        // If your Clerk tokens include roles in a claim, set the authority prefix and claim name:
-//        // grantedAuthoritiesConverter.setAuthorityPrefix("ROLE_");
-//        // grantedAuthoritiesConverter.setAuthoritiesClaimName("roles");
-//
-//        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-//        converter.setJwtGrantedAuthoritiesConverter(grantedAuthoritiesConverter);
-//        return converter;
-//    }
-//
-//        @Bean
 //    public CorsConfigurationSource corsConfigurationSource() {
 //        CorsConfiguration configuration = new CorsConfiguration();
 //        // For development, allow localhost. In prod, this will be dynamic based on the Tenant URL.
