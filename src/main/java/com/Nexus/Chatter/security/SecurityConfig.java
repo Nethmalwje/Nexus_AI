@@ -6,8 +6,8 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -50,8 +50,9 @@ public class SecurityConfig {
                 // Tell Spring this is a JWT resource server (Clerk)
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
 
-                // Multi-tenant ThreadLocal setup AFTER authentication
-                .addFilterAfter(tenantFilter, UsernamePasswordAuthenticationFilter.class);
+                // ⬇⬇⬇ IMPORTANT CHANGE HERE ⬇⬇⬇
+                // Run TenantFilter AFTER BearerTokenAuthenticationFilter
+                .addFilterAfter(tenantFilter, BearerTokenAuthenticationFilter.class);
 
         return http.build();
     }
@@ -60,7 +61,6 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // For dev – adjust as needed
         configuration.setAllowedOrigins(List.of(
                 "http://localhost:3000",
                 "http://localhost:5173"

@@ -8,6 +8,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -32,38 +34,74 @@ public class TenantFilter extends OncePerRequestFilter {
 
         String path = request.getRequestURI();
 
-        // 🔹 1. Skip tenant resolution for the sync endpoint
-        // This endpoint is used to CREATE the AppUser, so DB may not have the user yet.
+        // 1. Skip checks for the sync endpoint (user registration)
         if (path.startsWith("/api/auth/sync")) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        // 2. Get the authenticated user from Spring Security
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         if (authentication != null && authentication.isAuthenticated()) {
-            // Clerk uses "sub" as the user ID, Spring maps this to authentication.getName()
-            String clerkUserId = authentication.getName();
 
-            // 3. Find the user in our DB to get their Tenant ID
+            String clerkUserId = null;
+
+            // 🔹 Try to extract from JWT if this is a JWT auth
+            if (authentication instanceof JwtAuthenticationToken jwtAuth) {
+                Jwt jwt = (Jwt) jwtAuth.getPrincipal();
+
+                // Prefer the same claim you used in AuthSyncController
+                clerkUserId = jwt.getClaim("user_id");
+
+                // Fallback to sub if user_id missing (they're same in your case)
+                if (clerkUserId == null) {
+                    clerkUserId = jwt.getSubject(); // "sub"
+                }
+            } else {
+                // Fallback: use the name (often mapped to sub)
+                clerkUserId = authentication.getName();
+            }
+
+            if (clerkUserId == null) {
+                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                response.setContentType("application/json");
+                response.getWriter().write("""
+                    {
+                      "error": "MISSING_USER_ID",
+                      "message": "Could not resolve user id from JWT."
+                    }
+                    """);
+                return;
+            }
+
+            // 🔹 Check DB: does this AppUser exist?
             Optional<AppUser> userOptional = appUserRepository.findById(clerkUserId);
 
-            if (userOptional.isPresent()) {
-                AppUser user = userOptional.get();
+            if (userOptional.isEmpty()) {
+                // JWT is valid but user is not in our DB
+                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                response.setContentType("application/json");
+                response.getWriter().write("""
+                    {
+                      "error": "APP_USER_NOT_REGISTERED",
+                      "message": "User is authenticated with Clerk but not registered in Nexus backend. Call /api/auth/sync first."
+                    }
+                    """);
+                return;
+            }
 
-                if (user.getTenant() != null && user.getTenant().getId() != null) {
-                    UUID tenantId = user.getTenant().getId();
-                    TenantContext.setTenantId(tenantId);
-                }
+            AppUser user = userOptional.get();
+
+            // 🔹 Put tenant into ThreadLocal if present
+            if (user.getTenant() != null && user.getTenant().getId() != null) {
+                UUID tenantId = user.getTenant().getId();
+                TenantContext.setTenantId(tenantId);
             }
         }
 
         try {
-            // Let the request proceed
             filterChain.doFilter(request, response);
         } finally {
-            // 4. Always clear ThreadLocal to avoid leaks
             TenantContext.clear();
         }
     }
