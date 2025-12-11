@@ -35,20 +35,23 @@ public class SecurityConfig {
                 // Authorization rules
                 .authorizeHttpRequests(auth -> auth
                         // Used to create/sync AppUser from Clerk JWT
-                        .requestMatchers("/api/auth/sync").authenticated()
-
-                        // Public widget endpoints (no auth)
-                        .requestMatchers("/api/v1/widget/**").permitAll()
-
-                        // Admin / tenant management (Clerk JWT required)
-                        .requestMatchers("/api/v1/admin/**", "/api/v1/tenants/**").authenticated()
-
-                        // Everything else: require authentication by default
-                        .anyRequest().authenticated()
+//                        .requestMatchers("/api/auth/sync").authenticated()
+//
+//                        // Public widget endpoints (no auth)
+//                        .requestMatchers("/api/v1/widget/**").permitAll()
+//
+//                        // Admin / tenant management (Clerk JWT required)
+//                        .requestMatchers("/api/v1/admin/**", "/api/v1/tenants/**").authenticated()
+//
+//                        // Everything else: require authentication by default
+//                        .anyRequest().authenticated()
+                                .anyRequest().permitAll()
                 )
 
-                // Tell Spring this is a JWT resource server (Clerk)
-                .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
+//                // Tell Spring this is a JWT resource server (Clerk)
+//                .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
+                .oauth2ResourceServer(oauth2 -> oauth2.disable())  // 🔥 disable JWT checks
+
 
                 // ⬇⬇⬇ IMPORTANT CHANGE HERE ⬇⬇⬇
                 // Run TenantFilter AFTER BearerTokenAuthenticationFilter
