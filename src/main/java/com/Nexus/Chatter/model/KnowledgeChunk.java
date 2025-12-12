@@ -1,11 +1,14 @@
 package com.Nexus.Chatter.model;
 
+import com.Nexus.Chatter.util.VectorConverter;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.ColumnTransformer;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 // import java.util.List; // <--- Comment this out too if unused
 
@@ -27,8 +30,11 @@ public class KnowledgeChunk {
     private String content;
 
     // ----------- DISABLE VECTOR FOR NOW -----------
-    // @Column(columnDefinition = "vector(1536)")
-    // private List<Float> embedding;
+     @Column(columnDefinition = "vector(768)")
+
+     @Convert(converter = VectorConverter.class)
+     @ColumnTransformer(write = "?::vector")
+     private List<Double> embedding;
     // ----------------------------------------------
 
     @Column(name = "source_filename")
