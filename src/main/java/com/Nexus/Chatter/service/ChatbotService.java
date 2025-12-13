@@ -18,17 +18,14 @@ public class ChatbotService {
     private final ChatbotRepo chatbotRepository;
     private final TenantRepo tenantRepository;
     private final KnowledgeChunkRepo knowledgeChunkRepository;
-    private final LlmService llmService;
 
     // ⚡ HARDCODED TENANT ID (Nexus Corp)
     private final UUID CURRENT_TENANT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-    public ChatbotService(ChatbotRepo chatbotRepository, TenantRepo tenantRepository, KnowledgeChunkRepo knowledgeChunkRepository,
-                          LlmService llmService ) {
+    public ChatbotService(ChatbotRepo chatbotRepository, TenantRepo tenantRepository, KnowledgeChunkRepo knowledgeChunkRepository) {
         this.chatbotRepository = chatbotRepository;
         this.tenantRepository = tenantRepository;
         this.knowledgeChunkRepository = knowledgeChunkRepository;
-        this.llmService = llmService;
     }
 
     // 1. LIST ALL BOTS
@@ -57,21 +54,5 @@ public class ChatbotService {
                 .filter(bot -> bot.getTenant().getId().equals(CURRENT_TENANT_ID)) // Safety check
                 .orElseThrow(() -> new RuntimeException("Bot not found"));
     }
-
-    // ⭐ 4. ANSWER QUESTION (using ONE hardcoded knowledge chunk)
-    public String answerQuestion(UUID botId, String question) {
-        // a) Load bot
-        Chatbot bot = getBot(botId); // reuses existing logic
-
-        // b) For now: get the first knowledge chunk for this bot
-        KnowledgeChunk chunk = knowledgeChunkRepository.findFirstByChatbotId(bot.getId());
-
-        if (chunk == null) {
-            // If no chunk found, just respond with a simple message
-            return "No knowledge chunks found for this bot yet. Please upload a document first.";
-        }
-
-        // c) Delegate to LlmService (mock for now)
-        return llmService.answerQuestion(bot, question, chunk.getContent());
-    }
 }
+

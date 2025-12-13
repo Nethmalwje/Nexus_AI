@@ -36,23 +36,4 @@ public class ChatbotController {
         return ResponseEntity.ok(chatbotService.createBot(name, instruction));
     }
 
-    // ⭐ NEW
-    @PostMapping("/{botId}/ask")
-    public ResponseEntity<Map<String, String>> askBot(
-            @PathVariable UUID botId,
-            @RequestBody Map<String, String> body
-    ) {
-        // Expecting: { "question": "..." }
-        String question = body.get("question");
-
-        if (question == null || question.isBlank()) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", "QUESTION_MISSING"));
-        }
-
-        String answer = chatbotService.answerQuestion(botId, question);
-
-        // Respond as: { "answer": "..." }
-        return ResponseEntity.ok(Map.of("answer", answer));
-    }
 }
