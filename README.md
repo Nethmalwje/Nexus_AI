@@ -110,6 +110,13 @@ We are building a full SaaS platform. Here is the plan:
 * [ ] **Analytics:** Dashboard for "Most Common Questions" and "Bot Sentiment."
 
 ---
+## 🖥 Some UI Interfaces 
+<img width="1215" height="658" alt="image" src="https://github.com/user-attachments/assets/2d083f62-cede-4f42-a46b-6470975176e3" />
+<img width="1203" height="856" alt="image" src="https://github.com/user-attachments/assets/3401b3bd-3cca-43dd-afef-117b9e669727" />
+<img width="1079" height="807" alt="image" src="https://github.com/user-attachments/assets/78370a6f-06b3-4d13-b6fb-404d2df89be1" />
+
+
+
 
 
 
