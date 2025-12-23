@@ -17,7 +17,7 @@ public class ChatbotService {
 
     private final ChatbotRepo chatbotRepository;
     private final TenantRepo tenantRepository;
-    private final KnowledgeChunkRepo knowledgeChunkRepository;
+
 
     // ⚡ HARDCODED TENANT ID (Nexus Corp)
     private final UUID CURRENT_TENANT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -25,7 +25,6 @@ public class ChatbotService {
     public ChatbotService(ChatbotRepo chatbotRepository, TenantRepo tenantRepository, KnowledgeChunkRepo knowledgeChunkRepository) {
         this.chatbotRepository = chatbotRepository;
         this.tenantRepository = tenantRepository;
-        this.knowledgeChunkRepository = knowledgeChunkRepository;
     }
 
     // 1. LIST ALL BOTS

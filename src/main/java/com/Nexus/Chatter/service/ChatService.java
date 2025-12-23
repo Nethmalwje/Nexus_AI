@@ -1,150 +1,3 @@
-////package com.Nexus.Chatter.service;
-////
-////
-////import org.springframework.stereotype.Service;
-////import org.springframework.web.client.RestClient;
-////import java.util.List;
-////import java.util.Map;
-////import java.util.UUID;
-////
-////@Service
-////public class ChatService {
-////
-////    private final SearchService searchService; // 1. Dependency on Search
-////    private final RestClient chatClient;       // 2. Client for the LLM
-////
-////    public ChatService(SearchService searchService) {
-////        this.searchService = searchService;
-////        // Setup client for Ollama Generation
-////        this.chatClient = RestClient.builder()
-////                .baseUrl("http://localhost:11434")
-////                .build();
-////    }
-////
-////    public String generateResponse(UUID botId, String userQuestion) {
-////        // Step A: RETRIEVE (Get the context)
-////        List<String> relatedDocs = searchService.search(botId, userQuestion);
-////
-////        // Step B: AUGMENT (Build the Prompt)
-////        String context = String.join("\n---\n", relatedDocs);
-////        String prompt = """
-////                You are a helpful AI assistant. Answer the question based strictly on the context below.
-////
-////                CONTEXT:
-////                %s
-////
-////                QUESTION:
-////                %s
-////                """.formatted(context, userQuestion);
-////
-////        // Step C: GENERATE (Call the LLM)
-////        // Ensure you have run: `ollama pull llama3`
-//////        var request = Map.of(
-//////                "model", "llama3",
-//////                "prompt", prompt,
-//////                "stream", false
-//////        );
-////        var request = Map.of(
-////                "model", "tinyllama", // <--- Update this name
-////                "prompt", prompt,
-////                "stream", false
-////        );
-////
-////        Map response = chatClient.post()
-////                .uri("/api/generate")
-////                .body(request)
-////                .retrieve()
-////                .body(Map.class);
-////
-////        if (response != null && response.containsKey("response")) {
-////            return (String) response.get("response");
-////        }
-////
-////        return "I'm sorry, I couldn't generate a response.";
-////    }
-////}
-//
-//package com.Nexus.Chatter.service;
-//
-//import org.springframework.beans.factory.annotation.Value;
-//import org.springframework.stereotype.Service;
-//import org.springframework.web.client.RestClient;
-//
-//import java.util.List;
-//import java.util.Map;
-//import java.util.UUID;
-//
-//@Service
-//public class ChatService {
-//
-//    private final SearchService searchService;
-//    private final RestClient geminiClient;
-//
-//    // Inject key from application.properties
-//    @Value("${gemini.api.key}")
-//    private String apiKey;
-//
-//    public ChatService(SearchService searchService) {
-//        this.searchService = searchService;
-//        // 1. SWAP: Change Base URL to Google
-//        this.geminiClient = RestClient.builder()
-//                .baseUrl("https://generativelanguage.googleapis.com")
-//                .defaultHeader("Content-Type", "application/json")
-//                .build();
-//    }
-//
-//    public String generateResponse(UUID botId, String userQuestion) {
-//        // Step A: RETRIEVE (This part stays EXACTLY the same!)
-//        List<String> relatedDocs = searchService.search(botId, userQuestion);
-//
-//        // Step B: AUGMENT (Same prompt logic)
-//        String context = String.join("\n---\n", relatedDocs);
-//        String prompt = """
-//                You are a helpful AI assistant. Answer the question based strictly on the context below.
-//                CONTEXT:
-//                %s
-//                QUESTION:
-//                %s
-//                """.formatted(context, userQuestion);
-//
-//        // Step C: GENERATE (This is the "Swap" part)
-//
-//        // 2. SWAP: Translate "prompt" into Gemini's specific JSON structure
-//        var requestBody = Map.of(
-//                "contents", List.of(
-//                        Map.of("parts", List.of(
-//                                Map.of("text", prompt)
-//                        ))
-//                )
-//        );
-//
-//        // 3. SWAP: Send to Gemini Endpoint
-//        Map response = geminiClient.post()
-//                .uri(uriBuilder -> uriBuilder
-//                        .path("/v1beta/models/gemini-2.5-flash:generateContent")
-//                        .queryParam("key", apiKey) // Google needs key in URL
-//                        .build())
-//                .body(requestBody)
-//                .retrieve()
-//                .body(Map.class);
-//
-//        // 4. SWAP: Unpack Gemini's complex response
-//        try {
-//            if (response != null && response.containsKey("candidates")) {
-//                List candidates = (List) response.get("candidates");
-//                Map firstCandidate = (Map) candidates.get(0);
-//                Map content = (Map) firstCandidate.get("content");
-//                List parts = (List) content.get("parts");
-//                Map firstPart = (Map) parts.get(0);
-//                return (String) firstPart.get("text");
-//            }
-//        } catch (Exception e) {
-//            return "Error parsing Gemini response: " + e.getMessage();
-//        }
-//
-//        return "I'm sorry, I couldn't generate a response.";
-//    }
-//}
 package com.Nexus.Chatter.service;
 
 import com.Nexus.Chatter.model.Chatbot;
@@ -152,12 +5,14 @@ import com.Nexus.Chatter.model.ChatMessage;
 import com.Nexus.Chatter.model.Conversation;
 import com.Nexus.Chatter.repo.ChatMessageRepository;
 import com.Nexus.Chatter.repo.ChatbotRepo;
-import com.Nexus.Chatter.repo.ChatbotRepo;
 import com.Nexus.Chatter.repo.ConversationRepository;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -170,7 +25,10 @@ public class ChatService {
     private final ChatbotRepo chatbotRepository;
     private final ConversationRepository conversationRepository;
     private final ChatMessageRepository messageRepository;
+    private final AppointmentService appointmentService;
+
     private final RestClient geminiClient;
+    private final ObjectMapper objectMapper;
 
     @Value("${gemini.api.key}")
     private String apiKey;
@@ -178,100 +36,253 @@ public class ChatService {
     public ChatService(SearchService searchService,
                        ChatbotRepo chatbotRepository,
                        ConversationRepository conversationRepository,
-                       ChatMessageRepository messageRepository) {
+                       ChatMessageRepository messageRepository,
+                       AppointmentService appointmentService) {
+
         this.searchService = searchService;
         this.chatbotRepository = chatbotRepository;
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
+        this.appointmentService = appointmentService;
 
         this.geminiClient = RestClient.builder()
                 .baseUrl("https://generativelanguage.googleapis.com")
                 .defaultHeader("Content-Type", "application/json")
                 .build();
+
+        this.objectMapper = new ObjectMapper()
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     }
+
+    private LocalDateTime parseFlexibleDateTime(String s) {
+        if (s == null) throw new IllegalArgumentException("startTime/endTime is null");
+
+        String v = s.trim();
+
+        // Accept: "2025-10-20 14:00" -> "2025-10-20T14:00"
+        if (v.contains(" ") && !v.contains("T")) {
+            v = v.replace(" ", "T");
+        }
+
+        // Accept: "2025-10-20T14:00" -> add seconds
+        if (v.matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$")) {
+            v = v + ":00";
+        }
+
+        return LocalDateTime.parse(v); // now ISO-friendly
+    }
+
+
+    private String extractFirstJsonObject(String text) {
+        if (text == null) return "{}";
+
+        // Remove ```json ... ``` or ``` ... ```
+        text = text.trim();
+        if (text.startsWith("```")) {
+            int firstNewline = text.indexOf('\n');
+            if (firstNewline > 0) text = text.substring(firstNewline + 1);
+            int lastFence = text.lastIndexOf("```");
+            if (lastFence >= 0) text = text.substring(0, lastFence);
+            text = text.trim();
+        }
+
+        // Find first '{' and match until its closing '}'
+        int start = text.indexOf('{');
+        if (start < 0) return "{}";
+
+        int depth = 0;
+        for (int i = start; i < text.length(); i++) {
+            char ch = text.charAt(i);
+            if (ch == '{') depth++;
+            if (ch == '}') depth--;
+            if (depth == 0) {
+                return text.substring(start, i + 1).trim();
+            }
+        }
+        return "{}";
+    }
+
 
     public String generateResponse(UUID botId, String visitorId, String userQuestion) {
 
-        // 1. Load Bot
         Chatbot bot = chatbotRepository.findById(botId)
                 .orElseThrow(() -> new RuntimeException("Bot not found"));
 
-        // 2. Get or Create Session
         Conversation conversation = conversationRepository
                 .findByChatbotIdAndVisitorSessionId(botId, visitorId)
                 .orElseGet(() -> conversationRepository.save(new Conversation(bot, visitorId)));
 
-        // 3. Save USER Message to DB (So we remember it next time)
         messageRepository.save(new ChatMessage(conversation, "USER", userQuestion));
 
-        // 4. Load History (Context)
-        // We get top 10 NEWEST, so we must reverse them to be chronological (Oldest -> Newest)
-        List<ChatMessage> recentMsgs = messageRepository.findTop3ByConversationIdOrderByCreatedAtDesc(conversation.getId());
+        List<ChatMessage> recentMsgs =
+                messageRepository.findTop10ByConversationIdOrderByCreatedAtDesc(conversation.getId());
         Collections.reverse(recentMsgs);
 
-        // Build History String
         StringBuilder history = new StringBuilder();
         for (ChatMessage msg : recentMsgs) {
             history.append(msg.getSender()).append(": ").append(msg.getContent()).append("\n");
         }
 
-        // 5. RAG Retrieval
+        // --------------------------------------------------
+        // PHASE 5 — SAFE INTENT ROUTING
+        // --------------------------------------------------
+        BookingIntent intent = extractBookingIntent(bot, userQuestion, history.toString());
+        String intentType = intent.intent == null ? "" : intent.intent.trim().toUpperCase();
+        // ✅ Ask follow-up ONLY if it REALLY looks like a booking attempt
+        if ("NONE".equals(intentType)
+                && intent.confidence != null
+                && intent.confidence >= 0.7
+                && intent.followUpQuestion != null) {
+
+            saveBot(conversation, intent.followUpQuestion);
+            return intent.followUpQuestion;
+        }
+
+        // ✅ Booking flow
+        if ("BOOK_APPOINTMENT".equals(intentType)
+                && intent.confidence != null
+                && intent.confidence >= 0.7) {
+
+            LocalDateTime start = parseFlexibleDateTime(intent.startTime);
+            LocalDateTime end = parseFlexibleDateTime(intent.endTime);
+
+
+            var appt = appointmentService.createAppointment(
+                    botId,
+                    visitorId,
+                    intent.serviceName,
+                    start,
+                    end,
+                    intent.customerName,
+                    intent.customerContact
+            );
+
+            var result = appointmentService.confirmAppointment(appt.getId());
+
+            String reply = result.ok
+                    ? "✅ Booking confirmed!\nService: " + appt.getServiceName()
+                    + "\nStart: " + appt.getStartTime()
+                    + "\nEnd: " + appt.getEndTime()
+                    : result.httpStatus == 409
+                    ? "❌ That time slot is not available. Please choose another."
+                    : "❌ Booking failed: " + result.message;
+
+            saveBot(conversation, reply);
+            return reply;
+        }
+
+        // --------------------------------------------------
+        // NORMAL RAG CHAT (DEFAULT PATH)
+        // --------------------------------------------------
         List<String> relatedDocs = searchService.search(botId, userQuestion);
         String ragContext = String.join("\n---\n", relatedDocs);
 
-        // 6. Build Prompt with Memory AND Documents
         String prompt = """
                 You are a helpful AI assistant.
-                
-                HISTORY OF CONVERSATION:
-                %s
-                
-                RELEVANT DOCUMENTS:
-                %s
-                
-                USER QUESTION:
-                %s
-                """.formatted(history.toString(), ragContext, userQuestion);
 
-        // 7. Call Gemini
-        String aiResponse = callGemini(prompt);
+                HISTORY:
+                %s
 
-        // 8. Save BOT Response to DB
-        messageRepository.save(new ChatMessage(conversation, "BOT", aiResponse));
+                DOCUMENTS:
+                %s
 
-        return aiResponse;
+                QUESTION:
+                %s
+                """.formatted(history, ragContext, userQuestion);
+
+        String ai = callGemini(prompt);
+        saveBot(conversation, ai);
+        return ai;
     }
 
-    private String callGemini(String prompt) {
-        var requestBody = Map.of(
-                "contents", List.of(
-                        Map.of("parts", List.of(
-                                Map.of("text", prompt)
-                        ))
-                )
+    private void saveBot(Conversation c, String msg) {
+        messageRepository.save(new ChatMessage(c, "BOT", msg));
+    }
+
+    // --------------------------------------------------
+    // INTENT EXTRACTION
+    // --------------------------------------------------
+    private static class BookingIntent {
+        public String intent;
+        public String serviceName;
+        public String startTime;
+        public String endTime;
+        public String customerName;
+        public String customerContact;
+        public String followUpQuestion;
+        public Double confidence;
+    }
+
+    private BookingIntent extractBookingIntent(Chatbot bot,
+                                               String userMessage,
+                                               String historyText) {
+
+        String prompt = """
+You are an appointment booking intent extractor.
+
+Return ONLY valid JSON.
+
+{
+  "intent": "BOOK_APPOINTMENT" | "NONE",
+  "serviceName": string | null,
+  "startTime": string | null,
+  "endTime": string | null,
+  "customerName": string | null,
+  "customerContact": string | null,
+  "confidence": number,
+  "followUpQuestion": string | null
+}
+
+Rules:
+- If the user is NOT trying to book, set intent="NONE", confidence < 0.3, followUpQuestion=null
+- If booking intent exists but details missing, confidence >= 0.7 and ask followUpQuestion
+- Do NOT guess dates or times
+
+Business: %s
+Instructions: %s
+
+History:
+%s
+
+Message:
+%s
+""".formatted(
+                bot.getName(),
+                bot.getSystemInstruction() == null ? "" : bot.getSystemInstruction(),
+                historyText,
+                userMessage
         );
 
         try {
-            Map response = geminiClient.post()
-                    .uri(uriBuilder -> uriBuilder
-                            .path("/v1beta/models/gemini-2.5-flash:generateContent")
-                            .queryParam("key", apiKey)
-                            .build())
-                    .body(requestBody)
-                    .retrieve()
-                    .body(Map.class);
+            String raw = callGemini(prompt);
+            String cleanJson = extractFirstJsonObject(raw);   // ✅ new helper
+            return objectMapper.readValue(cleanJson, BookingIntent.class);
 
-            if (response != null && response.containsKey("candidates")) {
-                List candidates = (List) response.get("candidates");
-                Map firstCandidate = (Map) candidates.get(0);
-                Map content = (Map) firstCandidate.get("content");
-                List parts = (List) content.get("parts");
-                Map firstPart = (Map) parts.get(0);
-                return (String) firstPart.get("text");
-            }
         } catch (Exception e) {
-            return "Error: " + e.getMessage();
+            BookingIntent bi = new BookingIntent();
+            bi.intent = "NONE";
+            bi.confidence = 0.0;
+            bi.followUpQuestion = null;
+            return bi;
         }
-        return "I'm sorry, I couldn't generate a response.";
+    }
+
+    private String callGemini(String prompt) {
+        var body = Map.of(
+                "contents", List.of(Map.of(
+                        "parts", List.of(Map.of("text", prompt))
+                ))
+        );
+
+        Map res = geminiClient.post()
+                .uri(u -> u.path("/v1beta/models/gemini-2.5-flash:generateContent")
+                        .queryParam("key", apiKey).build())
+                .body(body)
+                .retrieve()
+                .body(Map.class);
+
+        List c = (List) res.get("candidates");
+        Map p = (Map) ((Map) c.get(0)).get("content");
+        return (String) ((Map) ((List) p.get("parts")).get(0)).get("text");
     }
 }
